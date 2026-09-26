@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APK 检测 · 前后端 Demo</title>
+<style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 28px 24px 48px;
+        background: #14161a; color: #e6e8eb;
+        font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .wrap { max-width: 940px; margin: 0 auto; }
+    h1 { font-size: 19px; margin: 0 0 4px; font-weight: 500; }
+    .sub { color: #8b939e; font-size: 12px; margin-bottom: 20px; }
+    .sub b { color: #b6bdc6; font-weight: 500; }
+    .card {
+        background: #1a1d22; border: 1px solid #262a31;
+        border-radius: 12px; padding: 18px; margin-bottom: 18px;
+    }
+    #drop {
+        border: 1.5px dashed #3a4048; border-radius: 10px;
+        padding: 34px 20px; text-align: center; cursor: pointer;
+        transition: border-color .15s, background .15s;
+    }
+    #drop:hover, #drop.over { border-color: #4c8bf5; background: #1c2027; }
+    #drop .big { font-size: 15px; color: #d5dae0; }
+    #drop .small { color: #6b7280; font-size: 12px; margin-top: 6px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+    select, button {
+        padding: 8px 12px; background: #22262d; border: 1px solid #31363d;
+        border-radius: 6px; color: #e6e8eb; font-size: 13px; outline: none;
+    }
+    button { background: #4c8bf5; border: 0; cursor: pointer; }
+    button:hover { background: #3d7ae0; }
+    button:disabled { background: #3a4048; cursor: not-allowed; }
+    label { display: inline-flex; align-items: center; gap: 6px; color: #b6bdc6; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid #262a31; text-align: left; vertical-align: top; }
+    th { color: #8b939e; font-weight: 500; }
+    .name { font-family: Consolas, Menlo, monospace; color: #9fb4d4; word-break: break-all; }
+    .score { font-size: 20px; font-weight: 500; }
+    .score.pass { color: #f87171; }
+    .score.fail { color: #4ade80; }
+    .tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+    .tag.pass { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.35); }
+    .tag.fail { background: rgba(34,197,94,.15); color: #4ade80; border: 1px solid rgba(34,197,94,.35); }
+    .meta { color: #8b939e; font-size: 12px; }
+    .bar { position: relative; height: 6px; width: 120px; background: #262a31; border-radius: 3px; margin-top: 6px; }
+    .bar > i { position: absolute; left: 0; top: 0; height: 6px; border-radius: 3px; background: #4c8bf5; }
+    .bar > u { position: absolute; top: -3px; width: 2px; height: 12px; background: #f87171; }
+    .chips { margin-top: 6px; }
+    .chip {
+        display: inline-block; margin: 2px 4px 2px 0; padding: 1px 7px;
+        background: #1f2530; border: 1px solid #31363d; border-radius: 10px;
+        font-size: 11px; color: #9fb4d4;
+    }
+    .chip b { color: #7fb3ff; font-weight: 500; }
+    .chip.neg { background: #2a1f22; border-color: #4a2b2f; color: #f09595; }
+    .chip.neg b { color: #f87171; }
+    .warn { color: #fbbf24; font-size: 12px; margin-top: 4px; }
+    .err { color: #f87171; font-size: 12px; margin-top: 4px; }
+    .empty { padding: 24px; text-align: center; color: #6b7280; font-size: 13px; }
+    .progress { height: 4px; background: #262a31; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .progress > i { display: block; height: 4px; background: #4c8bf5; width: 0; transition: width .15s; }
+    .tip { color: #6b7280; font-size: 12px; line-height: 1.9; }
+    .tip b { color: #b6bdc6; font-weight: 500; }
+    .tip code { font-family: Consolas, Menlo, monospace; color: #d5a6e8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>APK 检测 · 前后端 Demo</h1>
+<div class="sub">
+    前端 <b>demo.html</b>（纯静态，AJAX 上传） → 后端 <b>api.php</b>（调用 <code>apkcheck_score()</code> 返回 JSON）
+    · 服务端：<span id="env">加载中…</span>
+</div>
+
+<div class="card">
+    <div id="drop">
+        <div class="big">点击选择，或把文件拖到这里</div>
+        <div class="small">支持多选，逐个上传</div>
+    </div>
+    <input type="file" id="file" multiple hidden>
+
+    <div class="row">
+        <label>及格线
+            <select id="threshold">
+                <option value="5">宽松 5 分</option>
+                <option value="7" selected>默认 7 分</option>
+                <option value="10">严格 10 分</option>
+            </select>
+        </label>
+        <label><input type="checkbox" id="detail" checked> 显示命中特征明细</label>
+        <button id="clear">清空结果</button>
+    </div>
+    <div class="progress" id="progress" hidden><i></i></div>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+        <tr>
+            <th style="width:88px">结论</th>
+            <th>文件</th>
+            <th style="width:150px">积分 / 门槛</th>
+            <th>详情</th>
+        </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty">还没有检测记录</div>
+</div>
+
+<div class="tip">
+    <b>接口契约</b>：<code>POST api.php</code> 字段 <code>file</code>，返回
+    <code>{"ok":true,"score":22,"threshold":7,"is_apk":true,"elapsed_ms":5.2,"memory_used":"6 MB"}</code>；
+    加 <code>detail=1</code> 会附带命中特征。<code>GET api.php</code> 返回服务端上传限制与权重表。<br>
+    <b>库用法</b>：<code>$score = apkcheck_score($path);</code> —— 只返回整数分值，不做任何输出；
+    需要诊断信息时用 <code>apkcheck_verify()</code>。<br>
+    <b>体积限制</b>由 php.ini / nginx 决定（<code>upload_max_filesize</code>），库本身默认不限制。
+</div>
+
+</div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const rows = document.getElementById('rows');
+const emptyTip = document.getElementById('empty');
+const progress = document.getElementById('progress');
+const progressBar = progress.querySelector('i');
+const thresholdSel = document.getElementById('threshold');
+const detailChk = document.getElementById('detail');
+
+function hsize(n) {
+    if (n < 1024) return n + ' B';
+    const u = ['KB', 'MB', 'GB'];
+    let i = -1;
+    do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+    return n.toFixed(1) + ' ' + u[i];
+}
+
+function setEmpty() {
+    emptyTip.hidden = rows.children.length > 0;
+}
+
+function addRow(item) {
+    const tr = document.createElement('tr');
+
+    const verdict = document.createElement('td');
+    const tag = document.createElement('span');
+    tag.className = 'tag ' + (item.is_apk ? 'pass' : 'fail');
+    tag.textContent = item.is_apk ? '是 APK' : '不是 APK';
+    verdict.appendChild(tag);
+    if (item.err) {
+        const e = document.createElement('div');
+        e.className = 'err';
+        e.textContent = item.err;
+        verdict.appendChild(e);
+    }
+    tr.appendChild(verdict);
+
+    const nameTd = document.createElement('td');
+    nameTd.className = 'name';
+    nameTd.textContent = item.name;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = [
+        item.size ? hsize(item.size) : '',
+        item.elapsed_ms != null ? item.elapsed_ms + ' ms' : '',
+        item.memory_used || ''
+    ].filter(Boolean).join(' · ');
+    nameTd.appendChild(meta);
+    tr.appendChild(nameTd);
+
+    const scoreTd = document.createElement('td');
+    if (item.score != null) {
+        const s = document.createElement('div');
+        s.className = 'score ' + (item.is_apk ? 'pass' : 'fail');
+        s.textContent = item.score;
+        scoreTd.appendChild(s);
+        const t = document.createElement('div');
+        t.className = 'meta';
+        t.textContent = '门槛 ' + item.threshold;
+        scoreTd.appendChild(t);
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        const max = Math.max(item.score, item.threshold, 1);
+        const fill = document.createElement('i');
+        fill.style.width = Math.max(0, Math.min(100, (item.score / max) * 100)) + '%';
+        const line = document.createElement('u');
+        line.style.left = Math.min(100, (item.threshold / max) * 100) + '%';
+        bar.appendChild(fill);
+        bar.appendChild(line);
+        scoreTd.appendChild(bar);
+    }
+    tr.appendChild(scoreTd);
+
+    const detailTd = document.createElement('td');
+    if (item.detail && item.detail.features && item.detail.features.length) {
+        const chips = document.createElement('div');
+        chips.className = 'chips';
+        item.detail.features.forEach(f => {
+            const c = document.createElement('span');
+            c.className = 'chip' + (f.points < 0 ? ' neg' : '');
+            c.innerHTML = f.label + ' <b>' + (f.points >= 0 ? '+' : '') + f.points + '</b>';
+            chips.appendChild(c);
+        });
+        detailTd.appendChild(chips);
+    }
+    if (item.detail && item.detail.level_label) {
+        const d = document.createElement('div');
+        d.className = 'meta';
+        d.textContent = item.detail.level_label + ' · ' + item.detail.entry_count + ' 个条目';
+        detailTd.appendChild(d);
+    }
+    (item.detail && item.detail.warnings ? item.detail.warnings : []).forEach(w => {
+        const d = document.createElement('div');
+        d.className = 'warn';
+        d.textContent = '⚠ ' + w;
+        detailTd.appendChild(d);
+    });
+    if (item.err) {
+        const d = document.createElement('div');
+        d.className = 'err';
+        d.textContent = item.err;
+        detailTd.appendChild(d);
+    }
+    tr.appendChild(detailTd);
+
+    rows.prepend(tr);
+    setEmpty();
+}
+
+// 服务端限制（GET /api.php 拿到），用于上传前拦截超限文件
+let LIMITS = { upload_max_bytes: 0, post_max_bytes: 0, upload_max_filesize: '?', post_max_size: '?' };
+
+async function upload(file) {
+    // 超限的文件 PHP 会整个丢弃，不如先在本地拦下来，省一趟无用传输
+    const maxUp = LIMITS.upload_max_bytes || 0;
+    const maxPost = LIMITS.post_max_bytes || 0;
+    const cap = Math.min(maxUp || Infinity, maxPost || Infinity);
+    if (cap && file.size > cap) {
+        return {
+            name: file.name,
+            size: file.size,
+            score: null,
+            threshold: thresholdSel.value,
+            err: '文件 ' + hsize(file.size) + ' 超过服务器上传限制 '
+                 + (LIMITS.upload_max_filesize || '?') + '（post_max_size '
+                 + (LIMITS.post_max_size || '?') + '），请调大 php.ini 后重试'
+        };
+    }
+
+    return new Promise(resolve => {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('threshold', thresholdSel.value);
+        if (detailChk.checked) fd.append('detail', '1');
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'api.php');
+        xhr.upload.onprogress = e => {
+            if (e.lengthComputable) {
+                progressBar.style.width = (e.loaded / e.total * 100) + '%';
+            }
+        };
+        xhr.onload = () => {
+            let data;
+            try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+            if (!data || !data.ok) {
+                resolve({
+                    name: file.name, size: file.size, score: null,
+                    err: (data && data.error) ? data.error : ('HTTP ' + xhr.status)
+                });
+            } else {
+                resolve(data);
+            }
+        };
+        xhr.onerror = () => resolve({ name: file.name, size: file.size, score: null, err: '网络错误' });
+        xhr.send(fd);
+    });
+}
+
+async function handleFiles(list) {
+    const files = Array.from(list);
+    if (!files.length) return;
+    progress.hidden = false;
+    progressBar.style.width = '0';
+    for (const f of files) {
+        const item = await upload(f);
+        addRow(item);
+    }
+    setTimeout(() => { progress.hidden = true; }, 400);
+}
+
+drop.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add('over');
+}));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.remove('over');
+}));
+drop.addEventListener('drop', e => {
+    if (e.dataTransfer && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+document.getElementById('clear').addEventListener('click', () => {
+    rows.innerHTML = '';
+    setEmpty();
+});
+
+fetch('api.php')
+    .then(r => r.json())
+    .then(info => {
+        const l = info.limits || {};
+        LIMITS = Object.assign(LIMITS, l);
+        const env = document.getElementById('env');
+        env.textContent =
+            'PHP ' + (info.env ? info.env.php : '?') +
+            ' · 上传上限 ' + (l.upload_max_filesize || '?') +
+            ' · post ' + (l.post_max_size || '?') +
+            ' · 内存 ' + (l.memory_limit || '?') +
+            (info.env && !info.env.zip_ext ? ' · zip扩展缺失（内容校验降级）' : '');
+        const cap = Math.min(l.upload_max_bytes || Infinity, l.post_max_bytes || Infinity);
+        if (cap && cap < 20 * 1024 * 1024) {
+            env.textContent += ' · ⚠ 上传上限偏小，大包会被服务器丢弃';
+            env.style.color = '#fbbf24';
+        }
+        document.getElementById('drop').querySelector('.small').textContent =
+            '支持多选，逐个上传 · 单文件上限 ' + (l.upload_max_filesize || '未知');
+    })
+    .catch(() => {
+        document.getElementById('env').textContent = '（无法连接 api.php，请确认通过 HTTP 访问本页）';
+    });
+
+setEmpty();
+</script>
+</body>
+</html>
